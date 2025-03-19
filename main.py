@@ -23,6 +23,27 @@ DEST_DB = {
 SCHEMA = None  # e.g., "public"
 
 
+def get_table_definition_manual(db_config, table_name):
+    """Fetch table definition using PostgreSQL catalogs."""
+    query = f"""
+    SELECT 'CREATE TABLE ' || relname || E' (\n' ||
+           array_to_string(array_agg(attname || ' ' || format_type(atttypid, atttypmod)), E',\n') ||
+           E'\n);'
+    FROM pg_catalog.pg_class c
+    JOIN pg_catalog.pg_attribute a ON c.oid = a.attrelid
+    WHERE c.relname = '{table_name}' AND a.attnum > 0
+    GROUP BY c.relname;
+    """
+    try:
+        with psycopg2.connect(**db_config) as conn:
+            with conn.cursor() as cur:
+                cur.execute(query)
+                result = cur.fetchone()
+                return result[0] if result else f"No definition found for {table_name}"
+    except Exception as e:
+        return f"Error fetching {table_name}: {e}"
+
+
 def check_connection(db_config):
     """Check database connectivity."""
     try:
